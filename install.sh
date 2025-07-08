@@ -202,6 +202,21 @@ if [ "$VENV_ACTIVE" = false ] && [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
     echo "  export PATH=\"\$PATH:$INSTALL_DIR\""
 fi
 
+# Check for optional dependencies
+echo ""
+echo "🔍 Checking optional dependencies..."
+
+# Check for pytest
+if ! $PYTHON_EXECUTABLE -c "import pytest" &>/dev/null; then
+    echo "  ⚠️  pytest not found - install with: pip install pytest"
+fi
+
+# Check for PyYAML
+if ! $PYTHON_EXECUTABLE -c "import yaml" &>/dev/null; then
+    echo "  ⚠️  PyYAML not found - YAML config support disabled"
+    echo "     To enable YAML config files, install with: pip install pyyaml"
+fi
+
 echo ""
 echo "✅ Installation complete!"
 echo ""
@@ -211,9 +226,10 @@ if [ "$VENV_ACTIVE" = true ]; then
     echo ""
     echo "📚 Quick Start:"
     echo "  1. Your virtualenv now has 'tdd-python' available"
-    echo "  2. Initialize TDD in your project: tdd-python --init"
-    echo "  3. Check TDD status: tdd-python --status"
-    echo "  4. View configuration: tdd-python --config"
+    echo "  2. Install pytest if not already: pip install pytest"
+    echo "  3. Initialize TDD in your project: tdd-python --init"
+    echo "  4. Check TDD status: tdd-python --status"
+    echo "  5. View configuration: tdd-python --config"
     echo ""
     echo "🔧 To make TDD the default Python in this venv:"
     echo "  Uncomment the alias line in: $VIRTUAL_ENV/bin/activate"
@@ -224,9 +240,10 @@ else
     echo ""
     echo "📚 Quick Start:"
     echo "  1. Use 'tdd-python' instead of 'python' to enforce TDD"
-    echo "  2. Initialize TDD in your project: tdd-python --init"
-    echo "  3. Check TDD status: tdd-python --status"
-    echo "  4. View configuration: tdd-python --config"
+    echo "  2. Install pytest if not already: pip install --user pytest"
+    echo "  3. Initialize TDD in your project: tdd-python --init"
+    echo "  4. Check TDD status: tdd-python --status"
+    echo "  5. View configuration: tdd-python --config"
     echo ""
     echo "🔧 To make TDD the default Python:"
     echo "  Uncomment the alias line in your shell configuration"

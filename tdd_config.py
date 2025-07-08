@@ -7,7 +7,12 @@ import json
 import os
 from pathlib import Path
 from typing import Dict, List, Optional
-import yaml
+
+try:
+    import yaml
+    HAS_YAML = True
+except ImportError:
+    HAS_YAML = False
 
 class TDDConfig:
     """Manage TDD configuration with inheritance and overrides"""
@@ -182,8 +187,12 @@ class TDDConfig:
             with open(path, 'r') as f:
                 return json.load(f)
         elif path.suffix in ['.yml', '.yaml']:
-            with open(path, 'r') as f:
-                return yaml.safe_load(f) or {}
+            if HAS_YAML:
+                with open(path, 'r') as f:
+                    return yaml.safe_load(f) or {}
+            else:
+                print(f"Warning: PyYAML not installed, skipping {path}")
+                return {}
         
         return {}
     

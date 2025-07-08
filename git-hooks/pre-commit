@@ -36,6 +36,9 @@ def check_tests_exist(filepath):
     stem = path.stem
     parent = path.parent
     
+    # Get the project root (where .git is)
+    project_root = Path.cwd()
+    
     test_patterns = [
         f"test_{stem}.py",
         f"{stem}_test.py",
@@ -43,12 +46,20 @@ def check_tests_exist(filepath):
         f"tests/{stem}_test.py"
     ]
     
+    # Check in the same directory as the file
     for pattern in test_patterns:
         if list(parent.glob(pattern)):
             return True
         tests_dir = parent / 'tests'
         if tests_dir.exists() and list(tests_dir.glob(pattern.split('/')[-1])):
             return True
+    
+    # Check in project-level tests directory
+    project_tests = project_root / 'tests'
+    if project_tests.exists():
+        for pattern in [f"test_{stem}.py", f"{stem}_test.py"]:
+            if (project_tests / pattern).exists():
+                return True
     
     return False
 
@@ -58,6 +69,7 @@ def run_tests_for_file(filepath):
     path = Path(filepath)
     stem = path.stem
     parent = path.parent
+    project_root = Path.cwd()
     
     test_files = []
     test_patterns = [
@@ -66,11 +78,20 @@ def run_tests_for_file(filepath):
         f"tests/test_{stem}.py"
     ]
     
+    # Check in the same directory as the file
     for pattern in test_patterns:
         test_files.extend(parent.glob(pattern))
         tests_dir = parent / 'tests'
         if tests_dir.exists():
             test_files.extend(tests_dir.glob(pattern.split('/')[-1]))
+    
+    # Check in project-level tests directory
+    project_tests = project_root / 'tests'
+    if project_tests.exists():
+        for pattern in [f"test_{stem}.py", f"{stem}_test.py"]:
+            test_file = project_tests / pattern
+            if test_file.exists():
+                test_files.append(test_file)
     
     if not test_files:
         return False, "No test files found"
