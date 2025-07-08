@@ -1,0 +1,162 @@
+#!/usr/bin/env python3
+"""
+Git pre-commit hook for TDD enforcement
+"""
+
+import sys
+import subprocess
+import json
+from pathlib import Path
+
+# Add parent directory to path to import TDD modules
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from tdd_tracker import TDDDatabase
+from tdd_config import TDDConfig
+
+def get_staged_files():
+    """Get list of staged Python files"""
+    result = subprocess.run(
+        ['git', 'diff', '--cached', '--name-only', '--diff-filter=ACM'],
+        capture_output=True,
+        text=True
+    )
+    
+    files = result.stdout.strip().split('\n')
+    return [f for f in files if f.endswith('.py') and Path(f).exists()]
+
+def check_tests_exist(filepath):
+    """Check if test files exist for the given file"""
+    path = Path(filepath)
+    
+    # Skip if it's a test file
+    if any(pattern in path.name for pattern in ['test_', '_test.py', 'tests.py']):
+        return True
+    
+    stem = path.stem
+    parent = path.parent
+    
+    test_patterns = [
+        f"test_{stem}.py",
+        f"{stem}_test.py",
+        f"tests/test_{stem}.py",
+        f"tests/{stem}_test.py"
+    ]
+    
+    for pattern in test_patterns:
+        if list(parent.glob(pattern)):
+            return True
+        tests_dir = parent / 'tests'
+        if tests_dir.exists() and list(tests_dir.glob(pattern.split('/')[-1])):
+            return True
+    
+    return False
+
+def run_tests_for_file(filepath):
+    """Run tests related to a specific file"""
+    # Find test files
+    path = Path(filepath)
+    stem = path.stem
+    parent = path.parent
+    
+    test_files = []
+    test_patterns = [
+        f"test_{stem}.py",
+        f"{stem}_test.py",
+        f"tests/test_{stem}.py"
+    ]
+    
+    for pattern in test_patterns:
+        test_files.extend(parent.glob(pattern))
+        tests_dir = parent / 'tests'
+        if tests_dir.exists():
+            test_files.extend(tests_dir.glob(pattern.split('/')[-1]))
+    
+    if not test_files:
+        return False, "No test files found"
+    
+    # Run pytest on test files
+    test_paths = [str(f) for f in test_files if f.exists()]
+    result = subprocess.run(
+        ['pytest'] + test_paths,
+        capture_output=True
+    )
+    
+    return result.returncode == 0, result.stderr.decode() if result.stderr else ""
+
+def main():
+    """Main pre-commit hook logic"""
+    config = TDDConfig()
+    
+    if not config.get('require_test_before_commit', True):
+        sys.exit(0)
+    
+    db = TDDDatabase()
+    
+    staged_files = get_staged_files()
+    if not staged_files:
+        sys.exit(0)
+    
+    failed_files = []
+    
+    print("🔍 TDD Pre-commit Check")
+    print("-" * 40)
+    
+    for filepath in staged_files:
+        # Skip test files and excluded files
+        if any(pattern in filepath for pattern in config.get('excluded_files', [])):
+            continue
+        
+        print(f"Checking {filepath}...", end=" ")
+        
+        # Check if it's a test file
+        if 'test' in Path(filepath).name:
+            print("✓ (test file)")
+            continue
+        
+        # Check if tests exist
+        if not check_tests_exist(filepath):
+            print("❌ No tests found!")
+            failed_files.append((filepath, "No test files found"))
+            db.record_violation(filepath, 'no_tests_on_commit', 'error', 
+                              'Attempting to commit without tests')
+            continue
+        
+        # Check if file needs testing
+        needs_test, reason = db.needs_test(filepath)
+        if needs_test:
+            print(f"❌ {reason}")
+            
+            # Try to run tests
+            print(f"  Running tests for {filepath}...")
+            passed, error = run_tests_for_file(filepath)
+            
+            if passed:
+                print("  ✅ Tests passed!")
+                db.record_file_state(filepath, test_passed=True)
+            else:
+                print("  ❌ Tests failed!")
+                failed_files.append((filepath, "Tests failed"))
+                db.record_violation(filepath, 'failing_tests_on_commit', 'error',
+                                  'Attempting to commit with failing tests')
+        else:
+            print("✓")
+    
+    if failed_files:
+        print("\n❌ Pre-commit check failed!")
+        print("\nThe following files have issues:")
+        for filepath, reason in failed_files:
+            print(f"  - {filepath}: {reason}")
+        
+        print("\nTo fix:")
+        print("1. Write tests for files without tests")
+        print("2. Ensure all tests pass")
+        print("3. Try committing again")
+        
+        sys.exit(1)
+    
+    print("\n✅ All TDD checks passed!")
+    sys.exit(0)
+
+if __name__ == '__main__':
+    main()

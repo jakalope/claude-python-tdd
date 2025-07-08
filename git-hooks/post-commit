@@ -1,0 +1,67 @@
+#!/usr/bin/env python3
+"""
+Git post-commit hook for TDD tracking
+"""
+
+import sys
+import subprocess
+from pathlib import Path
+from datetime import datetime
+
+# Add parent directory to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from tdd_tracker import TDDDatabase
+
+def get_committed_files():
+    """Get list of files in the last commit"""
+    result = subprocess.run(
+        ['git', 'diff-tree', '--no-commit-id', '--name-only', '-r', 'HEAD'],
+        capture_output=True,
+        text=True
+    )
+    
+    files = result.stdout.strip().split('\n')
+    return [f for f in files if f.endswith('.py')]
+
+def get_commit_info():
+    """Get information about the last commit"""
+    result = subprocess.run(
+        ['git', 'log', '-1', '--pretty=format:%H|%an|%ae|%s'],
+        capture_output=True,
+        text=True
+    )
+    
+    parts = result.stdout.strip().split('|')
+    return {
+        'hash': parts[0],
+        'author': parts[1],
+        'email': parts[2],
+        'message': parts[3]
+    }
+
+def main():
+    """Track commit in TDD database"""
+    db = TDDDatabase()
+    
+    commit_info = get_commit_info()
+    committed_files = get_committed_files()
+    
+    # Record successful commit
+    for filepath in committed_files:
+        if Path(filepath).exists():
+            # Update file state as tested (since pre-commit passed)
+            db.record_file_state(filepath, test_passed=True)
+            
+            # Record TDD cycle completion
+            if 'test' in filepath:
+                db.record_tdd_cycle(filepath, 'red', 
+                                  f"Test committed: {commit_info['message']}")
+            else:
+                db.record_tdd_cycle(filepath, 'green', 
+                                  f"Implementation committed: {commit_info['message']}")
+    
+    print(f"✅ Commit tracked in TDD database")
+
+if __name__ == '__main__':
+    main()

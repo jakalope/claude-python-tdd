@@ -1,0 +1,320 @@
+#!/usr/bin/env python3
+"""
+TDD Python Wrapper - Enforces Test-Driven Development workflow
+This wrapper ensures tests are written and run before code execution
+"""
+
+import sys
+import os
+import json
+import subprocess
+import argparse
+import hashlib
+import time
+from datetime import datetime, timedelta
+from pathlib import Path
+import importlib.util
+
+# TDD state file location
+TDD_STATE_FILE = Path.home() / '.tdd-state' / 'state.json'
+TDD_STATE_FILE.parent.mkdir(exist_ok=True)
+
+# Configuration defaults
+DEFAULT_CONFIG = {
+    'test_timeout_minutes': 5,
+    'require_test_before_run': True,
+    'test_patterns': ['test_*.py', '*_test.py', 'tests.py'],
+    'test_commands': ['pytest', 'python -m pytest', 'python -m unittest'],
+    'excluded_files': ['setup.py', 'conftest.py'],
+    'strict_mode': True,
+    'allow_repl': True
+}
+
+class TDDState:
+    """Manages TDD workflow state"""
+    
+    def __init__(self):
+        self.state_file = TDD_STATE_FILE
+        self.state = self.load_state()
+    
+    def load_state(self):
+        """Load TDD state from file"""
+        if self.state_file.exists():
+            with open(self.state_file, 'r') as f:
+                return json.load(f)
+        return {'files': {}, 'tests': {}}
+    
+    def save_state(self):
+        """Save TDD state to file"""
+        with open(self.state_file, 'w') as f:
+            json.dump(self.state, f, indent=2)
+    
+    def get_file_hash(self, filepath):
+        """Calculate hash of file content"""
+        with open(filepath, 'rb') as f:
+            return hashlib.sha256(f.read()).hexdigest()
+    
+    def update_file_state(self, filepath, test_passed=False):
+        """Update state for a specific file"""
+        file_hash = self.get_file_hash(filepath)
+        self.state['files'][str(filepath)] = {
+            'hash': file_hash,
+            'last_tested': datetime.now().isoformat() if test_passed else None,
+            'test_passed': test_passed
+        }
+        self.save_state()
+    
+    def update_test_state(self, test_file, passed, related_files=None):
+        """Update test execution state"""
+        self.state['tests'][str(test_file)] = {
+            'last_run': datetime.now().isoformat(),
+            'passed': passed,
+            'related_files': related_files or []
+        }
+        self.save_state()
+    
+    def needs_test(self, filepath, config):
+        """Check if file needs to be tested before execution"""
+        filepath = str(filepath)
+        
+        # Check if file is excluded
+        for pattern in config.get('excluded_files', []):
+            if Path(filepath).match(pattern):
+                return False
+        
+        # Check if file exists in state
+        if filepath not in self.state['files']:
+            return True
+        
+        file_info = self.state['files'][filepath]
+        
+        # Check if file has changed
+        current_hash = self.get_file_hash(filepath)
+        if current_hash != file_info.get('hash'):
+            return True
+        
+        # Check if test passed
+        if not file_info.get('test_passed'):
+            return True
+        
+        # Check if test is recent enough
+        if file_info.get('last_tested'):
+            last_tested = datetime.fromisoformat(file_info['last_tested'])
+            timeout = timedelta(minutes=config.get('test_timeout_minutes', 5))
+            if datetime.now() - last_tested > timeout:
+                return True
+        
+        return False
+    
+    def find_related_tests(self, filepath):
+        """Find test files related to the given file"""
+        # Simple heuristic: look for test files with similar names
+        path = Path(filepath)
+        stem = path.stem
+        parent = path.parent
+        
+        test_patterns = [
+            f"test_{stem}.py",
+            f"{stem}_test.py",
+            f"test_{stem}_*.py",
+            f"tests/test_{stem}.py",
+            f"tests/{stem}_test.py"
+        ]
+        
+        related_tests = []
+        for pattern in test_patterns:
+            for test_file in parent.glob(pattern):
+                if test_file.exists():
+                    related_tests.append(str(test_file))
+            
+            # Also check in tests subdirectory
+            tests_dir = parent / 'tests'
+            if tests_dir.exists():
+                for test_file in tests_dir.glob(pattern.split('/')[-1]):
+                    if test_file.exists():
+                        related_tests.append(str(test_file))
+        
+        return related_tests
+
+class TDDWrapper:
+    """Main TDD wrapper implementation"""
+    
+    def __init__(self):
+        self.state = TDDState()
+        self.config = self.load_config()
+    
+    def load_config(self):
+        """Load configuration from file or use defaults"""
+        config_file = Path('.tdd-config.json')
+        if config_file.exists():
+            with open(config_file, 'r') as f:
+                user_config = json.load(f)
+                config = DEFAULT_CONFIG.copy()
+                config.update(user_config)
+                return config
+        return DEFAULT_CONFIG.copy()
+    
+    def find_test_command(self):
+        """Find available test command"""
+        for cmd in self.config['test_commands']:
+            try:
+                # Check if command is available
+                test_cmd = cmd.split()[0]
+                subprocess.run(['which', test_cmd], 
+                             capture_output=True, check=True)
+                return cmd
+            except subprocess.CalledProcessError:
+                continue
+        return None
+    
+    def run_tests(self, test_files=None):
+        """Run tests and return success status"""
+        test_cmd = self.find_test_command()
+        if not test_cmd:
+            print("❌ No test runner found. Install pytest or configure test command.")
+            return False
+        
+        if test_files:
+            cmd = f"{test_cmd} {' '.join(test_files)}"
+        else:
+            cmd = test_cmd
+        
+        print(f"🧪 Running tests: {cmd}")
+        result = subprocess.run(cmd, shell=True)
+        return result.returncode == 0
+    
+    def enforce_tdd(self, filepath):
+        """Enforce TDD workflow for the given file"""
+        if not self.config['require_test_before_run']:
+            return True
+        
+        # Check if tests are needed
+        if not self.state.needs_test(filepath, self.config):
+            return True
+        
+        # Find related test files
+        test_files = self.state.find_related_tests(filepath)
+        
+        if not test_files and self.config['strict_mode']:
+            print(f"❌ TDD Error: No test files found for {filepath}")
+            print("💡 Create a test file first:")
+            stem = Path(filepath).stem
+            print(f"   - test_{stem}.py")
+            print(f"   - {stem}_test.py")
+            print(f"   - tests/test_{stem}.py")
+            return False
+        
+        # Run tests
+        if test_files:
+            print(f"📋 Found test files: {', '.join(test_files)}")
+            if self.run_tests(test_files):
+                print("✅ Tests passed!")
+                self.state.update_file_state(filepath, test_passed=True)
+                for test_file in test_files:
+                    self.state.update_test_state(test_file, passed=True, 
+                                               related_files=[filepath])
+                return True
+            else:
+                print("❌ Tests failed! Fix tests before running code.")
+                self.state.update_file_state(filepath, test_passed=False)
+                for test_file in test_files:
+                    self.state.update_test_state(test_file, passed=False, 
+                                               related_files=[filepath])
+                return False
+        
+        # No tests found, run all tests as fallback
+        print("⚠️  No specific tests found, running all tests...")
+        if self.run_tests():
+            print("✅ All tests passed!")
+            self.state.update_file_state(filepath, test_passed=True)
+            return True
+        else:
+            print("❌ Tests failed! Write passing tests first.")
+            return False
+    
+    def run_python(self, args):
+        """Run Python with TDD enforcement"""
+        if not args:
+            # Interactive mode - allow by default
+            if self.config['allow_repl']:
+                os.execvp(sys.executable, [sys.executable])
+            else:
+                print("❌ Interactive mode disabled in TDD mode")
+                sys.exit(1)
+        
+        # Check if running a file
+        filepath = None
+        for i, arg in enumerate(args):
+            if not arg.startswith('-') and arg.endswith('.py'):
+                filepath = Path(arg).resolve()
+                break
+        
+        if filepath and filepath.exists():
+            # Check if it's a test file itself
+            is_test = any(filepath.match(pattern) 
+                         for pattern in self.config['test_patterns'])
+            
+            if not is_test:
+                # Enforce TDD for non-test files
+                if not self.enforce_tdd(filepath):
+                    sys.exit(1)
+        
+        # Execute Python with original arguments
+        os.execvp(sys.executable, [sys.executable] + args)
+
+def main():
+    """Main entry point"""
+    parser = argparse.ArgumentParser(description='TDD Python Wrapper')
+    parser.add_argument('--init', action='store_true', 
+                       help='Initialize TDD configuration')
+    parser.add_argument('--status', action='store_true',
+                       help='Show TDD status')
+    parser.add_argument('--reset', action='store_true',
+                       help='Reset TDD state')
+    parser.add_argument('--config', action='store_true',
+                       help='Show current configuration')
+    
+    args, python_args = parser.parse_known_args()
+    
+    if args.init:
+        # Initialize configuration
+        config_file = Path('.tdd-config.json')
+        if config_file.exists():
+            print("Configuration already exists.")
+        else:
+            with open(config_file, 'w') as f:
+                json.dump(DEFAULT_CONFIG, f, indent=2)
+            print("✅ Created .tdd-config.json")
+        sys.exit(0)
+    
+    if args.status:
+        # Show TDD status
+        state = TDDState()
+        print("TDD Status:")
+        print("-" * 40)
+        for filepath, info in state.state.get('files', {}).items():
+            status = "✅" if info.get('test_passed') else "❌"
+            last_tested = info.get('last_tested', 'Never')
+            print(f"{status} {filepath}")
+            print(f"   Last tested: {last_tested}")
+        sys.exit(0)
+    
+    if args.reset:
+        # Reset TDD state
+        TDD_STATE_FILE.unlink(missing_ok=True)
+        print("✅ TDD state reset")
+        sys.exit(0)
+    
+    if args.config:
+        # Show configuration
+        wrapper = TDDWrapper()
+        print("TDD Configuration:")
+        print(json.dumps(wrapper.config, indent=2))
+        sys.exit(0)
+    
+    # Normal Python execution with TDD enforcement
+    wrapper = TDDWrapper()
+    wrapper.run_python(python_args)
+
+if __name__ == '__main__':
+    main()
