@@ -81,26 +81,89 @@ else
     echo "  ℹ️  Not in a git repository, skipping git hooks"
 fi
 
-# Create alias for easy use
+# Setup aliases
 echo "🔧 Setting up aliases..."
-SHELL_RC=""
 
-if [ -n "$ZSH_VERSION" ]; then
-    SHELL_RC="${HOME}/.zshrc"
-elif [ -n "$BASH_VERSION" ]; then
-    SHELL_RC="${HOME}/.bashrc"
+# Function to add alias to a file
+add_alias_to_file() {
+    local file="$1"
+    local alias_line="alias tdd-python='${INSTALL_DIR}/tdd-python'"
+    local comment_line="# alias python='${INSTALL_DIR}/tdd-python'  # Uncomment to make TDD wrapper the default"
+    
+    # Check if alias already exists
+    if grep -q "alias tdd-python=" "$file" 2>/dev/null; then
+        echo "  ℹ️  TDD alias already exists in $file"
+        return 0
+    fi
+    
+    # Add the alias
+    echo "" >> "$file"
+    echo "# TDD Python Wrapper" >> "$file"
+    echo "$alias_line" >> "$file"
+    echo "$comment_line" >> "$file"
+    echo "  ✓ Added TDD alias to $file"
+}
+
+# Check for virtual environment
+VENV_ACTIVATE=""
+FOUND_VENV=false
+
+# Check common virtualenv locations
+if [ -n "$VIRTUAL_ENV" ]; then
+    VENV_ACTIVATE="$VIRTUAL_ENV/bin/activate"
+    FOUND_VENV=true
+elif [ -f "venv/bin/activate" ]; then
+    VENV_ACTIVATE="venv/bin/activate"
+    FOUND_VENV=true
+elif [ -f ".venv/bin/activate" ]; then
+    VENV_ACTIVATE=".venv/bin/activate"
+    FOUND_VENV=true
+elif [ -f "env/bin/activate" ]; then
+    VENV_ACTIVATE="env/bin/activate"
+    FOUND_VENV=true
 fi
 
-if [ -n "$SHELL_RC" ] && [ -f "$SHELL_RC" ]; then
-    if ! grep -q "alias python=tdd-python" "$SHELL_RC"; then
-        echo "" >> "$SHELL_RC"
-        echo "# TDD Python Wrapper" >> "$SHELL_RC"
-        echo "alias tdd-python='${INSTALL_DIR}/tdd-python'" >> "$SHELL_RC"
-        echo "# Uncomment to make TDD wrapper the default Python" >> "$SHELL_RC"
-        echo "# alias python='${INSTALL_DIR}/tdd-python'" >> "$SHELL_RC"
-        echo "  ✓ Added aliases to $SHELL_RC"
+if [ "$FOUND_VENV" = true ]; then
+    echo "🐍 Virtual environment detected: $VENV_ACTIVATE"
+    add_alias_to_file "$VENV_ACTIVATE"
+    echo ""
+    echo "  ℹ️  Alias added to virtualenv. Reactivate your environment to use it:"
+    echo "     deactivate && source $VENV_ACTIVATE"
+else
+    echo "⚠️  No virtual environment detected."
+    echo ""
+    
+    # Determine shell config file
+    SHELL_RC=""
+    if [ -n "$ZSH_VERSION" ] || [ "$SHELL" = "/bin/zsh" ] || [ "$SHELL" = "/usr/bin/zsh" ]; then
+        SHELL_RC="${HOME}/.zshrc"
+    elif [ -n "$BASH_VERSION" ] || [ "$SHELL" = "/bin/bash" ] || [ "$SHELL" = "/usr/bin/bash" ]; then
+        SHELL_RC="${HOME}/.bashrc"
+    fi
+    
+    if [ -n "$SHELL_RC" ] && [ -f "$SHELL_RC" ]; then
+        echo "  Would you like to add the TDD alias to $SHELL_RC?"
+        echo "  This will make 'tdd-python' available globally."
+        echo ""
+        read -p "  Add alias to $SHELL_RC? [y/N] " -n 1 -r
+        echo ""
+        
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            add_alias_to_file "$SHELL_RC"
+            echo "  ℹ️  Restart your shell or run: source $SHELL_RC"
+        else
+            echo "  ℹ️  Skipping global alias installation."
+            echo ""
+            echo "  To use TDD wrapper, either:"
+            echo "    1. Create a virtualenv and re-run this installer"
+            echo "    2. Use the full path: ${INSTALL_DIR}/tdd-python"
+            echo "    3. Manually add to your shell config:"
+            echo "       alias tdd-python='${INSTALL_DIR}/tdd-python'"
+        fi
     else
-        echo "  ℹ️  Aliases already exist in $SHELL_RC"
+        echo "  ℹ️  Could not determine shell configuration file."
+        echo "  Add this alias manually to your shell config:"
+        echo "     alias tdd-python='${INSTALL_DIR}/tdd-python'"
     fi
 fi
 
