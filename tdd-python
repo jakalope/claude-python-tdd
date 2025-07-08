@@ -273,6 +273,8 @@ def main():
                        help='Reset TDD state')
     parser.add_argument('--config', action='store_true',
                        help='Show current configuration')
+    parser.add_argument('--uninstall', action='store_true',
+                       help='Run the uninstaller')
     
     args, python_args = parser.parse_known_args()
     
@@ -311,6 +313,19 @@ def main():
         print("TDD Configuration:")
         print(json.dumps(wrapper.config, indent=2))
         sys.exit(0)
+    
+    if args.uninstall:
+        # Run uninstaller
+        script_dir = Path(__file__).parent
+        uninstall_script = script_dir / 'uninstall.sh'
+        
+        if uninstall_script.exists():
+            print("Running uninstaller...")
+            os.execvp('bash', ['bash', str(uninstall_script)])
+        else:
+            print("❌ Uninstall script not found at:", uninstall_script)
+            print("Please run uninstall.sh manually from the installation directory")
+        sys.exit(1)
     
     # Normal Python execution with TDD enforcement
     wrapper = TDDWrapper()

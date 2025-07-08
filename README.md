@@ -41,6 +41,24 @@ cd claude-tdd
 ./install.sh
 ```
 
+### Uninstall
+
+```bash
+# Method 1: Using the wrapper itself
+tdd-python --uninstall
+
+# Method 2: Run the uninstall script directly
+./uninstall.sh
+```
+
+The uninstaller will:
+- Remove the tdd-python executable
+- Clean up Python modules
+- Remove git hooks (if they point to TDD wrapper)
+- Optionally remove configuration and state files
+- Clean up aliases from virtualenv or shell config
+- Create backups of modified files
+
 ### Manual Install
 
 1. Copy `tdd-python` to your PATH:
@@ -87,6 +105,9 @@ tdd-python --config
 
 # Reset TDD state
 tdd-python --reset
+
+# Uninstall TDD wrapper
+tdd-python --uninstall
 ```
 
 ### Configuration
