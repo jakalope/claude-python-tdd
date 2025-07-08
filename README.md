@@ -30,15 +30,28 @@ A comprehensive Test-Driven Development (TDD) enforcement wrapper for Python tha
 
 ## Installation
 
-### Quick Install
+### Quick Install (Recommended - in virtualenv)
 
 ```bash
 # Clone the repository
 git clone https://github.com/yourusername/claude-tdd.git
 cd claude-tdd
 
+# Create and activate a virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
 # Run the installation script
 ./install.sh
+```
+
+### Global Install
+
+If you want to install globally (not recommended), run the installer without an active virtualenv:
+
+```bash
+./install.sh
+# You'll be prompted to confirm global installation
 ```
 
 ### Uninstall
@@ -61,21 +74,30 @@ The uninstaller will:
 
 ### Manual Install
 
-1. Copy `tdd-python` to your PATH:
-   ```bash
-   cp tdd-python ~/.local/bin/
-   chmod +x ~/.local/bin/tdd-python
-   ```
+For virtualenv installation:
+```bash
+# With virtualenv active
+cp tdd-python $VIRTUAL_ENV/bin/
+chmod +x $VIRTUAL_ENV/bin/tdd-python
 
-2. Install Python modules:
-   ```bash
-   pip install --user .
-   ```
+# Install Python modules
+pip install .
+```
 
-3. Initialize in your project:
-   ```bash
-   tdd-python --init
-   ```
+For global installation:
+```bash
+# Copy to user bin
+cp tdd-python ~/.local/bin/
+chmod +x ~/.local/bin/tdd-python
+
+# Install Python modules
+pip install --user .
+```
+
+Then initialize in your project:
+```bash
+tdd-python --init
+```
 
 ## Usage
 

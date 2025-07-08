@@ -4,11 +4,30 @@
 set -e
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-INSTALL_DIR="${HOME}/.local/bin"
 CONFIG_DIR="${HOME}/.config/tdd"
 
 echo "🚀 Installing Claude TDD Wrapper..."
 echo "================================="
+
+# Detect virtual environment
+VENV_ACTIVE=false
+if [ -n "$VIRTUAL_ENV" ]; then
+    VENV_ACTIVE=true
+    INSTALL_DIR="$VIRTUAL_ENV/bin"
+    PYTHON_EXECUTABLE="$VIRTUAL_ENV/bin/python"
+    echo "🐍 Virtual environment detected: $VIRTUAL_ENV"
+else
+    INSTALL_DIR="${HOME}/.local/bin"
+    PYTHON_EXECUTABLE="python3"
+    echo "⚠️  No virtual environment active. Installing globally to $INSTALL_DIR"
+    echo ""
+    read -p "Continue with global installation? [y/N] " -n 1 -r
+    echo ""
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "Installation cancelled. Please activate a virtual environment and try again."
+        exit 1
+    fi
+fi
 
 # Create directories
 mkdir -p "$INSTALL_DIR"
@@ -22,8 +41,16 @@ chmod +x "$INSTALL_DIR/tdd-python"
 
 # Install Python modules
 echo "📦 Installing Python modules..."
-PYTHON_VERSION=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
-SITE_PACKAGES="${HOME}/.local/lib/python${PYTHON_VERSION}/site-packages"
+PYTHON_VERSION=$($PYTHON_EXECUTABLE -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+
+if [ "$VENV_ACTIVE" = true ]; then
+    # Install in virtualenv site-packages
+    SITE_PACKAGES="$VIRTUAL_ENV/lib/python${PYTHON_VERSION}/site-packages"
+else
+    # Install in user site-packages
+    SITE_PACKAGES="${HOME}/.local/lib/python${PYTHON_VERSION}/site-packages"
+fi
+
 mkdir -p "$SITE_PACKAGES"
 
 cp "${SCRIPT_DIR}/tdd_tracker.py" "$SITE_PACKAGES/"
@@ -167,8 +194,8 @@ else
     fi
 fi
 
-# Check PATH
-if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
+# Check PATH (only for global installations)
+if [ "$VENV_ACTIVE" = false ] && [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
     echo ""
     echo "⚠️  Warning: $INSTALL_DIR is not in your PATH"
     echo "Add the following to your shell configuration:"
@@ -178,14 +205,33 @@ fi
 echo ""
 echo "✅ Installation complete!"
 echo ""
-echo "📚 Quick Start:"
-echo "  1. Use 'tdd-python' instead of 'python' to enforce TDD"
-echo "  2. Initialize TDD in your project: tdd-python --init"
-echo "  3. Check TDD status: tdd-python --status"
-echo "  4. View configuration: tdd-python --config"
-echo ""
-echo "🔧 To make TDD the default Python:"
-echo "  Uncomment the alias line in your shell configuration"
-echo "  or add: alias python='tdd-python'"
+
+if [ "$VENV_ACTIVE" = true ]; then
+    echo "📍 Installed in virtual environment: $VIRTUAL_ENV"
+    echo ""
+    echo "📚 Quick Start:"
+    echo "  1. Your virtualenv now has 'tdd-python' available"
+    echo "  2. Initialize TDD in your project: tdd-python --init"
+    echo "  3. Check TDD status: tdd-python --status"
+    echo "  4. View configuration: tdd-python --config"
+    echo ""
+    echo "🔧 To make TDD the default Python in this venv:"
+    echo "  Uncomment the alias line in: $VIRTUAL_ENV/bin/activate"
+    echo ""
+    echo "⚠️  Note: This installation is specific to this virtual environment"
+else
+    echo "📍 Installed globally in: $INSTALL_DIR"
+    echo ""
+    echo "📚 Quick Start:"
+    echo "  1. Use 'tdd-python' instead of 'python' to enforce TDD"
+    echo "  2. Initialize TDD in your project: tdd-python --init"
+    echo "  3. Check TDD status: tdd-python --status"
+    echo "  4. View configuration: tdd-python --config"
+    echo ""
+    echo "🔧 To make TDD the default Python:"
+    echo "  Uncomment the alias line in your shell configuration"
+    echo "  or add: alias python='tdd-python'"
+fi
+
 echo ""
 echo "📖 For more information, see README.md"

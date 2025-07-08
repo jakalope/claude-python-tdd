@@ -4,31 +4,50 @@
 set -e
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-INSTALL_DIR="${HOME}/.local/bin"
 CONFIG_DIR="${HOME}/.config/tdd"
 STATE_DIR="${HOME}/.tdd-state"
 
 echo "🗑️  Uninstalling Claude TDD Wrapper..."
 echo "===================================="
 
+# Detect installation location
+if [ -n "$VIRTUAL_ENV" ]; then
+    INSTALL_DIR="$VIRTUAL_ENV/bin"
+    PYTHON_EXECUTABLE="$VIRTUAL_ENV/bin/python"
+    PYTHON_VERSION=$($PYTHON_EXECUTABLE -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+    SITE_PACKAGES="$VIRTUAL_ENV/lib/python${PYTHON_VERSION}/site-packages"
+    echo "🐍 Virtual environment detected: $VIRTUAL_ENV"
+else
+    INSTALL_DIR="${HOME}/.local/bin"
+    PYTHON_EXECUTABLE="python3"
+    PYTHON_VERSION=$($PYTHON_EXECUTABLE -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+    SITE_PACKAGES="${HOME}/.local/lib/python${PYTHON_VERSION}/site-packages"
+    echo "📍 Checking global installation"
+fi
+
 # Remove main executable
 if [ -f "$INSTALL_DIR/tdd-python" ]; then
     echo "📦 Removing TDD wrapper executable..."
     rm -f "$INSTALL_DIR/tdd-python"
-    echo "  ✓ Removed tdd-python"
+    echo "  ✓ Removed tdd-python from $INSTALL_DIR"
+else
+    echo "  ℹ️  tdd-python not found in $INSTALL_DIR"
 fi
 
 # Remove Python modules
 echo "📦 Removing Python modules..."
-PYTHON_VERSION=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
-SITE_PACKAGES="${HOME}/.local/lib/python${PYTHON_VERSION}/site-packages"
-
+modules_found=false
 for module in tdd_tracker.py tdd_config.py tdd_import_hook.py; do
     if [ -f "$SITE_PACKAGES/$module" ]; then
         rm -f "$SITE_PACKAGES/$module"
         echo "  ✓ Removed $module"
+        modules_found=true
     fi
 done
+
+if [ "$modules_found" = false ]; then
+    echo "  ℹ️  No Python modules found in $SITE_PACKAGES"
+fi
 
 # Remove __pycache__ directories
 find "$SITE_PACKAGES" -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
