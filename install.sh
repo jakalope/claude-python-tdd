@@ -108,6 +108,59 @@ else
     echo "  ℹ️  Not in a git repository, skipping git hooks"
 fi
 
+# Setup Claude Code hooks
+echo "🪝 Setting up Claude Code hooks..."
+
+# Determine Claude config directory based on venv
+if [ "$VENV_ACTIVE" = true ]; then
+    CLAUDE_CONFIG_DIR="$VIRTUAL_ENV/.claude-code"
+else
+    CLAUDE_CONFIG_DIR="${HOME}/.claude-code"
+fi
+
+CLAUDE_HOOKS_DIR="${CLAUDE_CONFIG_DIR}/hooks"
+
+# Check if claude-code-hooks directory exists
+if [ -d "${SCRIPT_DIR}/claude-code-hooks" ]; then
+    echo "  Installing Claude Code hooks for CLAUDE.md awareness..."
+    
+    # Create directories
+    mkdir -p "$CLAUDE_CONFIG_DIR"
+    mkdir -p "$CLAUDE_HOOKS_DIR"
+    
+    # Copy hook scripts
+    cp "${SCRIPT_DIR}/claude-code-hooks/claude-md-tracker.sh" "$CLAUDE_HOOKS_DIR/"
+    cp "${SCRIPT_DIR}/claude-code-hooks/post-compaction-reminder.sh" "$CLAUDE_HOOKS_DIR/"
+    
+    # Make hooks executable
+    chmod +x "$CLAUDE_HOOKS_DIR/claude-md-tracker.sh"
+    chmod +x "$CLAUDE_HOOKS_DIR/post-compaction-reminder.sh"
+    
+    # Create or update Claude Code settings
+    CLAUDE_SETTINGS_FILE="${CLAUDE_CONFIG_DIR}/settings.json"
+    
+    if [ -f "$CLAUDE_SETTINGS_FILE" ]; then
+        echo "  ⚠️  Claude Code settings already exist at: $CLAUDE_SETTINGS_FILE"
+        echo "  Please manually add these hooks to your configuration:"
+        echo "    \"Stop\": \"$CLAUDE_HOOKS_DIR/claude-md-tracker.sh\","
+        echo "    \"PostToolUse\": \"$CLAUDE_HOOKS_DIR/claude-md-tracker.sh\""
+    else
+        cat > "$CLAUDE_SETTINGS_FILE" << EOF
+{
+  "hooks": {
+    "Stop": "$CLAUDE_HOOKS_DIR/claude-md-tracker.sh",
+    "PostToolUse": "$CLAUDE_HOOKS_DIR/claude-md-tracker.sh"
+  }
+}
+EOF
+        echo "  ✓ Claude Code hooks configured in: $CLAUDE_SETTINGS_FILE"
+    fi
+    
+    echo "  ✓ Claude Code hooks installed - will remind to re-read CLAUDE.md after compaction"
+else
+    echo "  ℹ️  Claude Code hooks directory not found, skipping"
+fi
+
 # Setup aliases
 echo "🔧 Setting up aliases..."
 
@@ -234,6 +287,10 @@ if [ "$VENV_ACTIVE" = true ]; then
     echo "🔧 To make TDD the default Python in this venv:"
     echo "  Uncomment the alias line in: $VIRTUAL_ENV/bin/activate"
     echo ""
+    echo "🪝 Claude Code hooks:"
+    echo "  - Installed to: $CLAUDE_CONFIG_DIR"
+    echo "  - Will remind Claude to re-read CLAUDE.md after context compaction"
+    echo ""
     echo "⚠️  Note: This installation is specific to this virtual environment"
 else
     echo "📍 Installed globally in: $INSTALL_DIR"
@@ -248,6 +305,10 @@ else
     echo "🔧 To make TDD the default Python:"
     echo "  Uncomment the alias line in your shell configuration"
     echo "  or add: alias python='tdd-python'"
+    echo ""
+    echo "🪝 Claude Code hooks:"
+    echo "  - Installed to: $CLAUDE_CONFIG_DIR"
+    echo "  - Will remind Claude to re-read CLAUDE.md after context compaction"
 fi
 
 echo ""
