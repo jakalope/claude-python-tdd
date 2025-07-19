@@ -34,20 +34,38 @@ A comprehensive Test-Driven Development (TDD) enforcement wrapper for Python tha
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/claude-tdd.git
-cd claude-tdd
+git clone https://github.com/jakalope/claude-python-tdd.git
 
-# Create and activate a virtual environment
+cd <your-project-root>
+
+# Create and activate a virtual environment in your project root
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-# Run the installation script
-./install.sh
+# Run the installation script from this repo from your project root
+../claude-python-tdd/install.sh
+```
+
+### CLAUDE.md Appendix
+
+Add the following to your `CLAUDE.md` file in your project root:
+
+```
+## How to code in this repository
+
+We're building are using python for devepment, along with custom hooks that
+enforce TDD principles and patterns, including a python wrapper and tool hook.
+We are operating within a virtual environment and using pip for package mgmt.
+You must source the venv before running the code or installing pip packages.
+After compacting the conversation, you need to re-read this file. One of the
+hooks will disallow git commits if there are files with no associated tests,
+including `__init__.py`.
 ```
 
 ### Global Install
 
-If you want to install globally (not recommended), run the installer without an active virtualenv:
+If you want to install globally (not recommended), run the installer without an
+active virtualenv:
 
 ```bash
 ./install.sh
